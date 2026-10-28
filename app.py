@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -96,6 +97,7 @@ ICONS = {
  "share": "<circle cx='18' cy='5' r='3'/><circle cx='6' cy='12' r='3'/><circle cx='18' cy='19' r='3'/><line x1='8.59' x2='15.42' y1='13.51' y2='17.49'/><line x1='15.41' x2='8.59' y1='6.51' y2='10.49'/>",
  "activity": "<path d='M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2'/>",
  "database": "<ellipse cx='12' cy='5' rx='9' ry='3'/><path d='M3 5V19A9 3 0 0 0 21 19V5'/><path d='M3 12A9 3 0 0 0 21 12'/>",
+ "calendar": "<rect x='3' y='4' width='18' height='17' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/>",
  "arrow": "<path d='M5 12h14'/><path d='m12 5 7 7-7 7'/>"}
 
 
@@ -111,7 +113,7 @@ def svg(n, s=16):
 
 
 NAVCSS = "".join(f"[data-testid=stSidebarNavItems] li:nth-child({i + 1}) [data-testid=stSidebarNavLink]{{--ic:{datauri(ICONS[n])}}}"
-                 for i, n in enumerate(["dashboard", "wind", "scatter", "share", "activity"]))
+                 for i, n in enumerate(["dashboard", "wind", "scatter", "share", "activity", "calendar"]))
 CONT = datauri("<g stroke-opacity='.4'>" + "".join(f"<ellipse cx='260' cy='150' rx='{r}' ry='{int(r * .62)}' transform='rotate(-18 260 150)'/>" for r in range(30, 260, 26)) + "</g>",
                vb="0 0 400 300", stroke=LIME, sw=.8)
 BRAND = datauri(ICONS["wind"], stroke=LIME)
@@ -128,7 +130,7 @@ CSS2 = f"""<style>
 .pills{{display:flex;gap:.5rem;flex-wrap:wrap}}
 .pill{{display:flex;align-items:center;gap:.45rem;border:1px solid #D5DCD3;background:#fff;border-radius:99px;padding:.35rem .8rem;font-size:.78rem;color:{MUTED};white-space:nowrap}}
 .pill svg{{color:{TEAL}}}
-[class*=st-key-panel-dark]{{background:radial-gradient(120% 140% at 85% 0%,#1E4D40 0%,#0F2A22 62%);border:0;position:relative;overflow:hidden;z-index:0}}
+div[class*=st-key-panel-dark]{{background:radial-gradient(120% 140% at 85% 0%,#1E4D40 0%,#0F2A22 62%);border:0;position:relative;overflow:hidden;z-index:0}}
 [class*=st-key-panel-dark]::before{{content:"";position:absolute;inset:0;background:{CONT} right center/75% no-repeat;z-index:-1;pointer-events:none}}
 [class*=st-key-panel-dark] [data-testid=stMarkdownContainer]{{color:#fff}}
 [class*=st-key-panel-dark] .sub,[class*=st-key-panel-dark] .legend,[class*=st-key-panel-dark] .strip span,[class*=st-key-panel-dark] .strip i,[class*=st-key-panel-dark] small{{color:#9DB5A9}}
@@ -172,7 +174,7 @@ def H(s):
 
 
 def head(t, s):
-    H(f'<div class="ph"><div><h1>{t}</h1><p>{s}</p></div><div class="pills"><div class="pill">{svg("database", 14)}<span>Demonstration data</span></div>'
+    H(f'<div class="ph"><div><h1>{t}</h1><p>{s}</p></div><div class="pills"><div class="pill">{svg("database", 14)}<span>Historical AQI data</span></div>'
       f'<div class="pill">{svg("activity", 14)}<span>CPCB-style AQI scale</span></div></div></div>')
 
 
@@ -207,7 +209,7 @@ def table(d, **kw):
         st.dataframe(d, use_container_width=True, hide_index=True, **kw)
 
 
-# ───────────────────────── Data (replace load_data with your real dataset) ─────────────────────────
+# ───────────────────────── Data (daily city-level CPCB-derived dataset) ─────────────────────────
 def sub_indices(d):
     return pd.DataFrame({p: np.interp(d[p], BP[p], [0, 50, 100, 200, 300, 400, 500]) for p in POLL}, index=d.index)
 
@@ -220,34 +222,33 @@ def cat_of(x):
     return str(categorize(pd.Series([x])).iloc[0])
 
 
-@st.cache_data(show_spinner="Preparing dataset…")
+DATA_PATH = Path(__file__).parent / "data" / "city_day.csv"
+
+
+@st.cache_data(show_spinner="Loading historical air-quality data…")
 def load_data():
-    """Synthetic sample. To use real data return a frame with Date, Station, PM2.5, PM10, NO2, SO2, CO, O3, AQI, Category."""
-    rng = np.random.default_rng(42)
-    dates = pd.date_range("2023-01-01", "2025-12-31")
-    n, doy = len(dates), dates.dayofyear.values
-    stations = {"Central Plaza": (55, 9, 22, 1.1, 48), "Industrial Belt": (78, 22, 40, 1.6, 40),
-                "Riverside": (48, 7, 18, 0.9, 52), "Ring Road": (66, 11, 28, 1.4, 44),
-                "Coastal Edge": (30, 5, 14, 0.7, 58), "University Campus": (38, 6, 16, 0.8, 54)}
-    out = []
-    for name, (b25, bn, bs, bc, bo) in stations.items():
-        z = np.zeros(n)
-        for i in range(1, n):
-            z[i] = 0.8 * z[i - 1] + rng.normal(0, 0.6)
-        lat = 0.55 * np.cos(2 * np.pi * (doy - 10) / 365.25) + 0.5 * z
-        ep = np.ones(n)
-        for s in rng.integers(0, n - 7, 24):
-            ep[s:s + rng.integers(3, 7)] *= rng.uniform(1.5, 2.3)
-        e = lambda s_: np.exp(s_ * rng.normal(size=n))
-        pm25 = b25 * np.exp(0.6 * lat) * e(0.12) * ep
-        out.append(pd.DataFrame({"Date": dates, "Station": name, "PM2.5": pm25,
-                                 "PM10": pm25 * rng.uniform(1.5, 1.9, n) * e(0.08),
-                                 "NO2": bn * np.exp(0.4 * lat) * e(0.15), "SO2": bs * np.exp(0.3 * lat) * e(0.2) / 4,
-                                 "CO": bc * np.exp(0.45 * lat) * e(0.15), "O3": bo * np.exp(-0.25 * lat) * e(0.12)}))
-    d = pd.concat(out, ignore_index=True).round(2)
-    d["AQI"] = sub_indices(d).max(axis=1).round(0)
-    d["Category"] = categorize(d["AQI"])
-    return d
+    """Load daily city-level AQI records from the CPCB-derived 2015–2020 dataset."""
+    if not DATA_PATH.exists():
+        raise FileNotFoundError(f"Dataset not found: {DATA_PATH}")
+
+    source = pd.read_csv(DATA_PATH)
+    required = ["City", "Date", *POLL, "AQI"]
+    missing = [column for column in required if column not in source.columns]
+    if missing:
+        raise ValueError(f"Dataset is missing required columns: {', '.join(missing)}")
+
+    d = source.rename(columns={"City": "Station", "AQI_Bucket": "Category"}).copy()
+    d["Date"] = pd.to_datetime(d["Date"], errors="coerce")
+    for column in POLL + ["AQI"]:
+        d[column] = pd.to_numeric(d[column], errors="coerce")
+
+    if "Category" not in d.columns:
+        d["Category"] = pd.NA
+    fallback = categorize(d["AQI"]).astype("string")
+    d["Category"] = d["Category"].where(d["Category"].isin(CATS), fallback)
+    d = d.dropna(subset=["Date", "Station", *POLL, "AQI"])
+    d["Category"] = d["Category"].astype(str)
+    return d[["Date", "Station", *POLL, "AQI", "Category"]].reset_index(drop=True)
 
 
 df = load_data()
@@ -262,6 +263,59 @@ def train_rf(d, test=0.2, trees=200):
     mse = mean_squared_error(yte, p)
     return dict(model=m, y=yte.values, p=p, imp=pd.Series(m.feature_importances_, POLL), MAE=mean_absolute_error(yte, p),
                 MSE=mse, RMSE=mse ** .5, R2=r2_score(yte, p), trainR2=m.score(Xtr, ytr))
+
+
+@st.cache_data(show_spinner="Preparing next-day forecasting data…")
+def make_next_day_pairs(d):
+    """Create one-day-ahead examples only when consecutive daily records exist."""
+    pairs = d.sort_values(["Station", "Date"]).copy()
+    grouped = pairs.groupby("Station", sort=False)
+    pairs["TargetDate"] = grouped["Date"].shift(-1)
+    pairs["TargetAQI"] = grouped["AQI"].shift(-1)
+    pairs = pairs[pairs["TargetDate"].eq(pairs["Date"] + pd.Timedelta(days=1))].copy()
+    pairs = pairs.reset_index(drop=True)
+
+    features = pairs[POLL + ["AQI"]].rename(columns={"AQI": "Previous-day AQI"}).copy()
+    features["Target month"] = pairs["TargetDate"].dt.month
+    features["Target day of year"] = pairs["TargetDate"].dt.dayofyear
+    features["Target weekday"] = pairs["TargetDate"].dt.dayofweek
+    city_features = pd.get_dummies(pairs["Station"], prefix="City", dtype=float)
+    features = pd.concat([features, city_features], axis=1)
+    return pairs, features
+
+
+@st.cache_resource(show_spinner="Training next-day Random Forest…")
+def train_next_day(d, trees=200):
+    pairs, features = make_next_day_pairs(d)
+    if len(pairs) < 100:
+        raise ValueError("There are not enough consecutive daily records to train a forecast model.")
+
+    cutoff = pairs["TargetDate"].quantile(.8)
+    train_mask = pairs["TargetDate"] < cutoff
+    test_mask = ~train_mask
+    if train_mask.sum() == 0 or test_mask.sum() == 0:
+        raise ValueError("Could not create a chronological train/test split for the forecast.")
+
+    model = RandomForestRegressor(n_estimators=trees, min_samples_leaf=2, random_state=42, n_jobs=-1)
+    model.fit(features.loc[train_mask], pairs.loc[train_mask, "TargetAQI"])
+    test = pairs.loc[test_mask].copy()
+    test["Predicted AQI"] = model.predict(features.loc[test_mask])
+    test["Previous-day AQI"] = test["AQI"]
+    actual = test["TargetAQI"]
+    predicted = test["Predicted AQI"]
+    mse = mean_squared_error(actual, predicted)
+    return dict(model=model, test=test, pair_count=len(pairs), train_count=int(train_mask.sum()),
+                test_count=int(test_mask.sum()), cutoff=cutoff, MAE=mean_absolute_error(actual, predicted),
+                RMSE=mse ** .5, R2=r2_score(actual, predicted),
+                baseline_MAE=mean_absolute_error(actual, test["Previous-day AQI"]))
+
+
+def next_day_features(rows):
+    features = rows[POLL + ["AQI"]].rename(columns={"AQI": "Previous-day AQI"}).copy()
+    features["Target month"] = rows["TargetDate"].dt.month
+    features["Target day of year"] = rows["TargetDate"].dt.dayofyear
+    features["Target weekday"] = rows["TargetDate"].dt.dayofweek
+    return pd.concat([features, pd.get_dummies(rows["Station"], prefix="City", dtype=float)], axis=1)
 
 
 @st.cache_data(show_spinner="Clustering…")
@@ -353,16 +407,16 @@ def spark(s):
 
 
 def overview():
-    head("Air quality overview", "How AQI and its pollutants have moved across monitoring stations, and what drives the poor days.")
+    head("Air quality overview", "How AQI and its pollutants have changed across Indian cities, and what drives the poor days.")
     c1, c2 = st.columns([1, 2])
-    stn = c1.selectbox("Station", ["All stations"] + sorted(df.Station.unique()))
+    stn = c1.selectbox("City", ["All cities"] + sorted(df.Station.unique()))
     lo_, hi_ = df.Date.min().date(), df.Date.max().date()
     rg = c2.date_input("Period", (lo_, hi_), min_value=lo_, max_value=hi_)
     if len(rg) != 2:
         st.info("Choose an end date to continue.")
         return
     d = df[(df.Date >= pd.Timestamp(rg[0])) & (df.Date <= pd.Timestamp(rg[1]))]
-    if stn != "All stations":
+    if stn != "All cities":
         d = d[d.Station == stn]
     if d.empty:
         st.warning("No records for this selection. Widen the period.")
@@ -397,7 +451,7 @@ def overview():
     sec("AQI over time", "Shaded bands show the AQI category at each level.")
     f1, f2 = st.columns([1, 2])
     res = f1.radio("Resolution", ["Daily", "Weekly", "Monthly"], index=1, horizontal=True)
-    split = f2.toggle("Split by station", False) if stn == "All stations" else False
+    split = f2.toggle("Split by city", False) if stn == "All cities" else False
     g = d.groupby([pd.Grouper(key="Date", freq={"Daily": "D", "Weekly": "W", "Monthly": "MS"}[res])] + (["Station"] if split else []))["AQI"].mean().reset_index()
     top = max(g.AQI.max() * 1.1, 120)
     fig = go.Figure()
@@ -417,7 +471,7 @@ def overview():
 
     l, r = st.columns([1.5, 1], gap="large")
     with l:
-        sec("Days by category", "Share of records in each AQI category, per station.")
+        sec("Days by category", "Share of records in each AQI category, per city.")
         ct = (pd.crosstab(d.Station, d.Category, normalize="index") * 100).reindex(columns=CATS, fill_value=0)
         ct = ct.loc[ct[["Poor", "Very Poor", "Severe"]].sum(axis=1).sort_values().index]
         f = go.Figure()
@@ -436,7 +490,7 @@ def overview():
         show(f, 320)
 
     sec("Pollution patterns")
-    t1, t2, t3 = st.tabs(["Seasonal pattern", "Pollutant relationships", "Station comparison"])
+    t1, t2, t3 = st.tabs(["Seasonal pattern", "Pollutant relationships", "City comparison"])
     with t1:
         m = d.groupby(d.Date.dt.month)[POLL].mean()
         z = (m / m.mean()).T
@@ -553,6 +607,44 @@ def prediction():
         show(f, 320)
 
 
+# ───────────────────────── Page: Next-day forecast ─────────────────────────
+def next_day_forecast():
+    head("Next-day AQI forecast", "Use each city's previous-day pollutant readings and AQI to estimate its following day's AQI.")
+    M = train_next_day(df)
+    strip([("Backtest MAE", f"{M['MAE']:.1f}", "AQI points"),
+           ("Previous-day baseline MAE", f"{M['baseline_MAE']:.1f}", "predict tomorrow equals today"),
+           ("Backtest R²", f"{M['R2']:.3f}", "later dates held out"),
+           ("Test examples", f"{M['test_count']:,}", f"forecast dates from {M['cutoff']:%b %Y}")])
+    st.caption(f"The model trains on earlier dates and evaluates on later dates. It uses {M['pair_count']:,} consecutive-day pairs; gaps in the source data are skipped. The dataset ends in July 2020, so these are historical demonstrations, not current air-quality forecasts.")
+
+    latest = df.sort_values(["Station", "Date"]).groupby("Station", as_index=False).tail(1).copy()
+    city = st.selectbox("City to forecast", sorted(latest["Station"].unique()), key="forecast_city")
+    row = latest.loc[latest["Station"] == city].iloc[[0]].copy()
+    row["TargetDate"] = row["Date"] + pd.Timedelta(days=1)
+    model_features = next_day_features(row).reindex(columns=M["model"].feature_names_in_, fill_value=0)
+    predicted = float(M["model"].predict(model_features)[0])
+    category = cat_of(predicted)
+
+    a, b, c = st.columns(3)
+    a.metric("Last complete AQI", f"{row['AQI'].iloc[0]:.0f}")
+    b.metric("Forecast AQI", f"{predicted:.0f}")
+    c.metric("Forecast date", row["TargetDate"].iloc[0].strftime("%d %b %Y"))
+    H(f'<p>{chip(category)} <span style="color:{MUTED}">for {city}, based on readings from {row["Date"].iloc[0]:%d %b %Y}</span></p>')
+
+    sec("Backtest for this city", "Actual next-day AQI, model forecast, and a simple previous-day baseline on the held-out dates.")
+    test_city = M["test"].loc[M["test"]["Station"] == city].sort_values("TargetDate")
+    if test_city.empty:
+        st.info("This city has no records in the held-out date range.")
+        return
+    fig = go.Figure()
+    fig.add_scatter(x=test_city["TargetDate"], y=test_city["TargetAQI"], name="Actual AQI", mode="lines", line=dict(color=INK, width=2))
+    fig.add_scatter(x=test_city["TargetDate"], y=test_city["Predicted AQI"], name="Forecast", mode="lines", line=dict(color=TEAL, width=2))
+    fig.add_scatter(x=test_city["TargetDate"], y=test_city["Previous-day AQI"], name="Previous-day baseline", mode="lines", line=dict(color="#E0A93B", width=1.5, dash="dot"))
+    fig.update_xaxes(title="Forecast date")
+    fig.update_yaxes(title="AQI")
+    show(fig, 380)
+
+
 # ───────────────────────── Page: K-Means ─────────────────────────
 def kpi(M):
     strip([("Silhouette", f"{M['sil']:.2f}", "higher is better"), ("Davies–Bouldin", f"{M['dbi']:.2f}", "lower is better"),
@@ -570,7 +662,7 @@ def clustering():
     ma = df.groupby(lab).AQI.mean()
     l, r = st.columns([2, 1], gap="large")
     with l:
-        sec("Cluster map", f"Each point is one station-day. Choose any two axes; principal components capture {M['var'].sum():.0%} of variance.")
+        sec("Cluster map", f"Each point is one city-day. Choose any two axes; principal components capture {M['var'].sum():.0%} of variance.")
         opts = ["Principal component 1", "Principal component 2"] + POLL
         nm = lambda o: LABEL.get(o, o)
         ttl = lambda o: o if o.startswith("Principal") else f"{LABEL[o]} ({UNIT[o]})"
@@ -760,7 +852,7 @@ def evaluation():
     f = go.Figure(go.Bar(x=e.index, y=e.values, marker_color=[CCOL[c] for c in e.index], hovertemplate="%{x}: MAE %{y:.2f}<extra></extra>"))
     f.update_yaxes(title="MAE (AQI points)")
     show(f, 280)
-    st.caption("If AQI was calculated from these same pollutants, as in the sample data, scores will be close to perfect. Expect lower R² on measured data.")
+    st.caption("This same-day regression estimates AQI from pollutants measured on the same day. The Next-day forecast page uses a chronological holdout to evaluate future-date predictions.")
 
     k = st.session_state.get("k", 4)
     M = run_kmeans(df, k)
@@ -778,14 +870,15 @@ def evaluation():
 pg = st.navigation([
     st.Page(overview, title="Overview", icon=":material/dashboard:", url_path="overview", default=True),
     st.Page(prediction, title="AQI prediction", icon=":material/air:", url_path="prediction"),
+    st.Page(next_day_forecast, title="Next-day forecast", icon=":material/calendar_month:", url_path="forecast"),
     st.Page(clustering, title="K-Means clusters", icon=":material/bubble_chart:", url_path="clusters"),
     st.Page(association, title="Association rules", icon=":material/hub:", url_path="rules"),
     st.Page(evaluation, title="Model evaluation", icon=":material/monitoring:", url_path="evaluation"),
 ])
 with st.sidebar:
     train_rf(df)
-    H(f'<div class="side"><h6><span class="dot" style="background:#E0A93B"></span>Demonstration data</h6>'
-      f'<div>Source<b>Synthetic sample</b></div><div>Records<b>{len(df):,}</b></div><div>Stations<b>{df.Station.nunique()}</b></div>'
-      f'<div>Period<b>{df.Date.min():%b %Y} to {df.Date.max():%b %Y}</b></div><div>AQI standard<b>CPCB-style</b></div>'
-      f'<p class="note">Values on every page come from generated sample data, not measured readings. Replace load_data() with your dataset.</p></div>')
+    H(f'<div class="side"><h6><span class="dot" style="background:#65A765"></span>Historical AQI data</h6>'
+      f'<div>Source<b>CPCB via Kaggle</b></div><div>Records<b>{len(df):,}</b></div><div>Cities<b>{df.Station.nunique()}</b></div>'
+      f'<div>Period<b>{df.Date.min():%b %Y} to {df.Date.max():%b %Y}</b></div><div>AQI standard<b>CPCB</b></div>'
+      f'<p class="note">Daily city averages from CPCB-derived data (2015–2020). Incomplete rows were excluded. These are historical readings, not live monitoring.</p></div>')
 pg.run()
