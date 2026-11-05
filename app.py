@@ -15,7 +15,7 @@ from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score,
                              silhouette_score, davies_bouldin_score, calinski_harabasz_score)
 from mlxtend.frequent_patterns import apriori, association_rules
 
-st.set_page_config(page_title="Atmos | Air Quality Intelligence", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="AQI | Air Quality Intelligence", page_icon="🌿", layout="wide")
 
 # ───────────────────────── Tokens ─────────────────────────
 BG, SIDE, GREEN, TEAL, INK, LINE, MUTED = "#F7F8F5", "#0F2A22", "#65A765", "#4F9D91", "#202923", "#E3E8E1", "#5E6B63"
@@ -56,7 +56,7 @@ header[data-testid=stHeader]{{background:transparent}}
 .block-container{{max-width:1240px;padding:2.4rem 2.2rem 4rem}}
 [data-testid=stSidebar]{{background:{SIDE};border-right:0}}
 [data-testid=stSidebar] *{{color:#E6EFE9}}
-[data-testid=stSidebarNav]::before{{content:"Atmos";display:block;font:800 1.6rem Manrope,sans-serif;padding:1.2rem .8rem .7rem;color:#fff}}
+[data-testid=stSidebarNav]::before{{content:"AQI";display:block;font:800 1.6rem Manrope,sans-serif;padding:1.2rem .8rem .7rem;color:#fff}}
 [data-testid=stSidebarNavLink]{{border-radius:10px;padding:.55rem .8rem;margin:2px 0;font-weight:500}}
 [data-testid=stSidebarNavLink]:hover{{background:rgba(255,255,255,.07)}}
 [data-testid=stSidebarNavLink][aria-current=page]{{background:rgba(101,167,101,.18);box-shadow:inset 3px 0 0 {GREEN};font-weight:600}}
@@ -154,7 +154,7 @@ div[class*=st-key-panel-dark]{{background:radial-gradient(120% 140% at 85% 0%,#1
 .mini div{{height:4px;background:#E7ECE5;border-radius:4px}}.mini i{{display:block;height:4px;background:{TEAL};border-radius:4px}}.mini b{{color:{INK};font-size:.82rem}}
 </style>"""
 
-pio.templates["atmos"] = go.layout.Template(layout=dict(
+pio.templates["AQI"] = go.layout.Template(layout=dict(
     font=dict(family="Inter, Segoe UI, sans-serif", color=INK, size=13),
     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     colorway=[TEAL, GREEN, "#E0A93B", "#D9783A", "#8A6FB0", "#3E7CB1"],
@@ -163,7 +163,7 @@ pio.templates["atmos"] = go.layout.Template(layout=dict(
     hoverlabel=dict(bgcolor=SIDE, bordercolor=SIDE, font=dict(color="#fff", family="Inter, sans-serif")),
     legend=dict(orientation="h", y=1.1, x=0, title=dict(text="")),
     margin=dict(l=4, r=4, t=24, b=4)))
-pio.templates.default = "atmos"
+pio.templates.default = "AQI"
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown(CSS2, unsafe_allow_html=True)
 
@@ -174,9 +174,7 @@ def H(s):
 
 
 def head(t, s):
-    H(f'<div class="ph"><div><h1>{t}</h1><p>{s}</p></div><div class="pills"><div class="pill">{svg("database", 14)}<span>Historical AQI data</span></div>'
-      f'<div class="pill">{svg("activity", 14)}<span>CPCB-style AQI scale</span></div></div></div>')
-
+    H(f'<div class="ph"><div><h1>{t}</h1><p>{s}</p></div></div>')
 
 def sec(t, s=""):
     H(f'<h3 class="sec">{t}</h3><p class="sub">{s}</p>')
@@ -195,12 +193,11 @@ def legend():
 
 
 def show(fig, h=340):
-    fig.update_layout(height=h)
+    fig.update_layout(height=h, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     try:
         st.plotly_chart(fig, theme=None, config={"displayModeBar": False})
     except TypeError:
         st.plotly_chart(fig, config={"displayModeBar": False})
-
 
 def table(d, **kw):
     try:
@@ -658,7 +655,6 @@ def clustering():
     st.session_state["k"] = k
     M = run_kmeans(df, k)
     lab = M["lab"]
-    kpi(M)
     ma = df.groupby(lab).AQI.mean()
     l, r = st.columns([2, 1], gap="large")
     with l:
@@ -856,8 +852,7 @@ def evaluation():
 
     k = st.session_state.get("k", 4)
     M = run_kmeans(df, k)
-    sec("Clustering: K-Means", f"Evaluated at k = {k}, set on the K-Means page. Silhouette suggests {'strong' if M['sil'] > .5 else 'reasonable' if M['sil'] > .25 else 'weak'} structure.")
-    kpi(M)
+    sec("Clustering: K-Means", f"Evaluated at k = {k}, set on the K-Means page. Silhouette score across different k:")
     sw = sweep(df)
     f = go.Figure(go.Scatter(x=sw.k, y=sw.Silhouette, mode="lines+markers", line=dict(color=TEAL, width=2.5), hovertemplate="k = %{x}<br>Silhouette %{y:.2f}<extra></extra>"))
     f.add_vline(x=k, line_dash="dot", line_color=INK, annotation_text="Selected")
